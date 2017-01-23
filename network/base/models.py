@@ -67,8 +67,9 @@ class Station(models.Model):
     qthlocator = models.CharField(max_length=255, blank=True)
     location = models.CharField(max_length=255, blank=True)
     antenna = models.ManyToManyField(Antenna, blank=True,
-                                     help_text=('If you want to add a new Antenna '
-                                                'contact SatNOGS Team'))
+                                     help_text=('If you want to add a new Antenna contact '
+                                                '<a href="https://community.satnogs.org/" '
+                                                'target="_blank">SatNOGS Team</a>'))
     featured_date = models.DateField(null=True, blank=True)
     created = models.DateTimeField(auto_now_add=True)
     active = models.BooleanField(default=False)
@@ -123,6 +124,7 @@ class Satellite(models.Model):
     name = models.CharField(max_length=45)
     names = models.TextField(blank=True)
     image = models.CharField(max_length=100, blank=True, null=True)
+    manual_tle = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['norad_cat_id']
@@ -243,7 +245,7 @@ class Observation(models.Model):
         return self.data_set.filter(vetted_status='unknown').count()
 
     def __unicode__(self):
-        return "%d" % self.id
+        return '{0}'.format(self.id)
 
 
 class Data(models.Model):
@@ -253,7 +255,6 @@ class Data(models.Model):
     observation = models.ForeignKey(Observation)
     ground_station = models.ForeignKey(Station)
     payload = models.FileField(upload_to='data_payloads', blank=True, null=True)
-    payload_demode = models.FileField(upload_to='data_payloads', blank=True, null=True)
     vetted_datetime = models.DateTimeField(null=True, blank=True)
     vetted_user = models.ForeignKey(User, related_name="vetted_user_set", null=True, blank=True)
     vetted_status = models.CharField(choices=OBSERVATION_STATUSES,
@@ -280,3 +281,8 @@ class Data(models.Model):
 
     class Meta:
         ordering = ['-start', '-end']
+
+
+class DemodData(models.Model):
+    data = models.ForeignKey(Data, related_name='demoddata')
+    payload_demod = models.FileField(upload_to='data_payloads', blank=True, null=True)

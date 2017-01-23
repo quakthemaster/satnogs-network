@@ -1,13 +1,41 @@
 from rest_framework import serializers
 
-from network.base.models import Data, Station
+from network.base.models import Data, Station, DemodData
+
+
+class DemodDataSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DemodData
+        fields = ('payload_demod', )
 
 
 class DataSerializer(serializers.ModelSerializer):
+    transmitter = serializers.SerializerMethodField()
+    norad_cat_id = serializers.SerializerMethodField()
+    demoddata = DemodDataSerializer(many=True)
+
     class Meta:
         model = Data
-        fields = ('id', 'start', 'end', 'observation', 'ground_station', 'payload', 'payload_demode')
-        read_only_fields = ['id', 'start', 'end', 'observation', 'ground_station']
+        fields = ('id', 'start', 'end', 'observation', 'ground_station', 'transmitter',
+                  'norad_cat_id', 'payload', 'demoddata')
+        read_only_fields = ['id', 'start', 'end', 'observation', 'ground_station',
+                            'transmitter', 'norad_cat_id']
+
+    def update(self, instance, validated_data):
+        demod_data = validated_data.pop('demoddata')
+        data = super(DataSerializer, self).update(instance, validated_data)
+        for demod in demod_data:
+            data.demoddata.create(payload_demod=demod['payload_demod'])
+        return data
+
+    def get_transmitter(self, obj):
+        try:
+            return obj.observation.transmitter.uuid
+        except AttributeError:
+            return ''
+
+    def get_norad_cat_id(self, obj):
+        return obj.observation.satellite.norad_cat_id
 
 
 class JobSerializer(serializers.ModelSerializer):

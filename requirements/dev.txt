@@ -2,7 +2,15 @@
 -r base.txt
 
 # Debug & Testing
-django-debug-toolbar==1.4
-sqlparse==0.1.19
-flake8==2.5.4
-factory-boy==2.6.1
+sqlparse==0.2.2
+flake8==3.2.1
+factory-boy==2.8.1
+pytest==3.0.5
+pytest-cov==2.4.0
+pytest-django==3.1.2
+pytest-xdist==1.15.0
+python-coveralls==2.9.0
+coverage==4.3.1
+faker
+docopts
+mock==2.0.0

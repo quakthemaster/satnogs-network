@@ -1,4 +1,6 @@
 from os import path, getenv
+import dj_database_url
+
 BASE_DIR = path.dirname(path.dirname(__file__))
 
 # Apps
@@ -19,12 +21,16 @@ THIRD_PARTY_APPS = (
     'allauth',
     'allauth.account',
     'compressor',
+    'djangobower',
 )
 LOCAL_APPS = (
     'network.users',
     'network.base',
     'network.api',
 )
+BOWER_INSTALLED_APPS = (
+)
+
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
 # Middlware
@@ -102,6 +108,7 @@ STATICFILES_FINDERS = (
     'django.contrib.staticfiles.finders.FileSystemFinder',
     'django.contrib.staticfiles.finders.AppDirectoriesFinder',
     'compressor.finders.CompressorFinder',
+    'djangobower.finders.BowerFinder',
 )
 MEDIA_ROOT = path.join(path.dirname(BASE_DIR), 'media')
 MEDIA_URL = '/media/'
@@ -188,14 +195,15 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_FILTER_BACKENDS': (
         'rest_framework.filters.DjangoFilterBackend',
-    )
+    ),
+    'DEFAULT_PAGINATION_CLASS': 'network.api.pagination.LinkedHeaderPageNumberPagination',
+    'PAGE_SIZE': 25
 }
 
 # Security
 SECRET_KEY = getenv('SECRET_KEY', 'changeme')
 
 # Database
-import dj_database_url
 DATABASE_URL = getenv('DATABASE_URL', 'sqlite:///db.sqlite3')
 DATABASES = {'default': dj_database_url.parse(DATABASE_URL)}
 
@@ -206,6 +214,7 @@ MAPBOX_TOKEN = getenv('MAPBOX_TOKEN', '')
 
 # Observations datetimes in minutes
 DATE_MIN_START = '15'
+DATE_MIN_END = '75'
 DATE_MAX_RANGE = '480'
 
 # Station heartbeat in minutes
@@ -214,3 +223,6 @@ OBSERVATION_MAX_DELETION_RANGE = getenv('OBSERVATION_MAX_DELETION_RANGE', 10)
 
 # DB API
 DB_API_ENDPOINT = getenv('DB_API_ENDPOINT', 'https://db.satnogs.org/api/')
+
+# ListView pagination
+ITEMS_PER_PAGE = 25

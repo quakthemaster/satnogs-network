@@ -4,6 +4,7 @@
 __pycache__
 env
 .env
+.cache
 
 # Logs
 *.log
@@ -27,3 +28,4 @@ nosetests.xml
 # Media & Static
 media
 /staticfiles/*
+network/static/lib/

@@ -16,6 +16,8 @@ from django.http import JsonResponse, HttpResponseNotFound, HttpResponseServerEr
 from django.contrib.auth.decorators import login_required
 from django.core.management import call_command
 
+from django.views.generic import ListView
+
 from rest_framework import serializers, viewsets
 
 from network.base.models import (Station, Transmitter, Observation,
@@ -31,7 +33,7 @@ class StationSerializer(serializers.ModelSerializer):
 
 
 class StationAllView(viewsets.ReadOnlyModelViewSet):
-    queryset = Station.objects.all()
+    queryset = Station.objects.filter(active=True)
     serializer_class = StationSerializer
 
 
@@ -67,7 +69,7 @@ def index(request):
         featured_station = None
 
     ctx = {
-        'latest_observations': observations.filter(end__lt=now()),
+        'latest_observations': observations.filter(end__lt=now()).order_by('-id')[:10],
         'scheduled_observations': observations.filter(end__gte=now()),
         'featured_station': featured_station,
         'mapbox_id': settings.MAPBOX_MAP_ID,
@@ -116,21 +118,36 @@ def settings_site(request):
     return render(request, 'base/settings_site.html')
 
 
-def observations_list(request):
-    """View to render Observations page."""
-    observations = Observation.objects.all()
-    satellites = Satellite.objects.all()
+class ObservationListView(ListView):
+    """
+    Displays a list of observations with pagination
+    """
+    model = Observation
+    ordering = '-id'
+    context_object_name = "observations"
+    paginate_by = settings.ITEMS_PER_PAGE
+    template_name = 'base/observations.html'
 
-    if request.method == 'GET':
-        form = SatelliteFilterForm(request.GET)
-        if form.is_valid():
-            norad = form.cleaned_data['norad']
-            observations = observations.filter(satellite__norad_cat_id=norad)
-            return render(request, 'base/observations.html',
-                          {'observations': observations, 'satellites': satellites, 'norad': int(norad)})
+    def get_queryset(self):
+        """
+        Optionally filter based on norad get argument
+        """
+        norad_cat_id = self.request.GET.get('norad', None)
+        if norad_cat_id is None or norad_cat_id == '':
+            return Observation.objects.all()
+        else:
+            return Observation.objects.filter(satellite__norad_cat_id=norad_cat_id)
 
-    return render(request, 'base/observations.html',
-                  {'observations': observations, 'satellites': satellites})
+    def get_context_data(self, **kwargs):
+        """
+        Need to add a list of satellites to the context for the template
+        """
+        context = super(ObservationListView, self).get_context_data(**kwargs)
+        context['satellites'] = Satellite.objects.all()
+        norad_cat_id = self.request.GET.get('norad', None)
+        if norad_cat_id is not None and norad_cat_id != '':
+            context['norad'] = int(norad_cat_id)
+        return context
 
 
 @login_required
@@ -140,9 +157,18 @@ def observation_new(request):
     if request.method == 'POST':
         sat_id = request.POST.get('satellite')
         trans_id = request.POST.get('transmitter')
-        start_time = datetime.strptime(request.POST.get('start-time'), '%Y-%m-%d %H:%M')
+        try:
+            start_time = datetime.strptime(request.POST.get('start-time'), '%Y-%m-%d %H:%M')
+            end_time = datetime.strptime(request.POST.get('end-time'), '%Y-%m-%d %H:%M')
+        except ValueError:
+            messages.error(request, 'Please use the datetime dialogs to submit valid values.')
+            return redirect(reverse('base:observation_new'))
+
+        if (end_time - start_time) > timedelta(minutes=int(settings.DATE_MAX_RANGE)):
+            messages.error(request, 'Please use the datetime dialogs to submit valid timeframe.')
+            return redirect(reverse('base:observation_new'))
+
         start = make_aware(start_time, utc)
-        end_time = datetime.strptime(request.POST.get('end-time'), '%Y-%m-%d %H:%M')
         end = make_aware(end_time, utc)
         sat = Satellite.objects.get(norad_cat_id=sat_id)
         trans = Transmitter.objects.get(id=trans_id)
@@ -180,6 +206,7 @@ def observation_new(request):
                   {'satellites': satellites,
                    'transmitters': transmitters, 'norad': norad,
                    'date_min_start': settings.DATE_MIN_START,
+                   'date_min_end': settings.DATE_MIN_END,
                    'date_max_range': settings.DATE_MAX_RANGE})
 
 
@@ -303,8 +330,9 @@ def observation_view(request, id):
         discuss_slug = 'https://community.satnogs.org/t/observation-{0}-{1}-{2}' \
             .format(observation.id, slugify(observation.satellite.name),
                     observation.satellite.norad_cat_id)
-        discuss_url = ('https://community.satnogs.org/new-topic?title=Observation {0}: {1} ({2})'
-                       '&body=Regarding [Observation {3}](http://{4}{5}) ...&category=observations') \
+        discuss_url = ('https://community.satnogs.org/new-topic?title=Observation {0}: {1}'
+                       ' ({2})&body=Regarding [Observation {3}](http://{4}{5}) ...'
+                       '&category=observations') \
             .format(observation.id, observation.satellite.name,
                     observation.satellite.norad_cat_id, observation.id,
                     request.get_host(), request.path)
@@ -432,6 +460,7 @@ def station_view(request, id):
                                         'debug': observer.next_pass(sat_ephem),
                                         'name': str(satellite.name),
                                         'id': str(satellite.id),
+                                        'norad_cat_id': str(satellite.norad_cat_id),
                                         'tr': tr,           # Rise time
                                         'azr': azimuth,     # Rise Azimuth
                                         'tt': tt,           # Max altitude time
@@ -483,7 +512,7 @@ def station_edit(request):
 
         return redirect(reverse('base:station_view', kwargs={'id': f.id}))
     else:
-        messages.error(request, 'Some fields missing on the form')
+        messages.error(request, 'Your Station submission had some errors.{0}'.format(form.errors))
         return redirect(reverse('users:view_user', kwargs={'username': request.user.username}))
 
 
@@ -495,3 +524,28 @@ def station_delete(request, id):
     station.delete()
     messages.success(request, 'Ground Station deleted successfully.')
     return redirect(reverse('users:view_user', kwargs={'username': me}))
+
+
+def satellite_view(request, id):
+    try:
+        sat = get_object_or_404(Satellite, norad_cat_id=id)
+    except:
+        data = {
+            'error': 'Unable to find that satellite.'
+        }
+        return JsonResponse(data, safe=False)
+
+    data = {
+        'id': id,
+        'name': sat.name,
+        'names': sat.names,
+        'image': sat.image,
+    }
+
+    return JsonResponse(data, safe=False)
+
+
+def observation_data_view(request, id):
+    observation = get_object_or_404(Observation, data__id=id)
+    return redirect(reverse('base:observation_view',
+                    kwargs={'id': observation.id}) + '#{0}'.format(id))

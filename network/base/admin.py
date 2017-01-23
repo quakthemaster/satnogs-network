@@ -1,13 +1,14 @@
 from django.contrib import admin
 
 from network.base.models import (Antenna, Satellite, Station, Transmitter,
-                                 Observation, Data, Mode, Tle, Rig)
+                                 Observation, Data, Mode, Tle, Rig, DemodData)
 
 
 @admin.register(Rig)
 class RigAdmin(admin.ModelAdmin):
     list_display = ('name', 'rictld_number')
     list_filter = ('name', )
+
 
 @admin.register(Mode)
 class ModeAdmin(admin.ModelAdmin):
@@ -39,7 +40,6 @@ class SatelliteAdmin(admin.ModelAdmin):
 @admin.register(Tle)
 class TleAdmin(admin.ModelAdmin):
     list_display = ('tle0', 'tle1', 'updated_date')
-    readonly_fields = ('tle0', 'tle1', 'tle2')
 
     def updated_date(self, obj):
         return obj.updated.strftime('%d.%m.%Y, %H:%M')
@@ -50,7 +50,7 @@ class TransmitterAdmin(admin.ModelAdmin):
     list_display = ('uuid', 'description', 'satellite', 'uplink_low',
                     'uplink_high', 'downlink_low', 'downlink_high')
     search_fields = ('satellite', 'uuid')
-    list_filter = ('mode', 'invert', 'uuid')
+    list_filter = ('mode', 'invert')
     readonly_fields = ('uuid', 'description', 'satellite', 'uplink_low', 'uplink_high',
                        'downlink_low', 'downlink_high', 'baud', 'invert', 'alive', 'mode')
 
@@ -68,10 +68,17 @@ class ObservationAdmin(admin.ModelAdmin):
         return obj.end.strftime('%d.%m.%Y, %H:%M')
 
 
+class DataDemodInline(admin.TabularInline):
+    model = DemodData
+
+
 @admin.register(Data)
 class DataAdmin(admin.ModelAdmin):
     list_display = ('id', 'start_date', 'end_date', 'observation', 'ground_station')
     readonly_fields = ('observation', 'ground_station')
+    inlines = [
+        DataDemodInline,
+    ]
 
     def start_date(self, obj):
         return obj.start.strftime('%d.%m.%Y, %H:%M')

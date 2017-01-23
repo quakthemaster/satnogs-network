@@ -89,7 +89,11 @@
                   </span>
                 </a>
               </td>
-              <td>{{ observation.satellite.name }}</td>
+              <td>
+                <a href="#" data-toggle="modal" data-target="#SatelliteModal" data-id="{{ observation.satellite.norad_cat_id }}">
+                  {{ observation.satellite.name }}
+                </a>
+              </td>
               <td>{{ observation.transmitter.downlink_low|frq }}</td>
               <td>{{ observation.transmitter.mode|default:"-" }}</td>
               <td>{{ observation.start|date:"Y-m-d H:i:s" }}</br>{{ observation.end|date:"Y-m-d H:i:s" }}</td>
@@ -102,10 +106,50 @@
           {% endfor %}
         </tbody>
       </table>
+      {% if is_paginated %}
+        <nav>
+          <ul class="pagination">
+            {% if page_obj.has_previous %}
+              <li>
+                <a href="?page={{ page_obj.previous_page_number }}">
+                  <span>&laquo;</span>
+                </a>
+              </li>
+            {% else %}
+              <li class="disabled">
+                <a href="#">
+                  <span>&laquo;</span>
+                </a>
+              </li>
+            {% endif %}
+
+            {% for page in paginator.page_range %}
+              <li {% if page == page_obj.number %}class="active"{% endif %}>
+                <a href="?page={{ page }}">{{ page }}</a>
+              </li>
+            {% endfor %}
+            {% if page_obj.has_next %}
+              <li>
+                <a href="?page={{ page_obj.next_page_number }}">
+                  <span>&raquo;</span>
+                </a>
+              </li>
+            {% else %}
+              <li {% if not page_obj.has_next %}class="disabled"{% endif %}>
+                <a href="#">
+                  <span>&raquo;</span>
+                </a>
+              </li>
+            {% endif %}
+          </ul>
+        </nav>
+      {% endif %}
     </div>
   </div>
+  {% include 'includes/satellite.html' %}
 {% endblock content %}
 
 {% block javascript %}
   <script src="{% static 'js/observations.js' %}"></script>
+  <script src="{% static 'js/satellite.js' %}"></script>
 {% endblock javascript %}

@@ -40,7 +40,7 @@
         <tbody>
             <tr>
               <td>
-                <a href="#" data-toggle="modal" data-target="#SatelliteModal">
+                <a href="#" data-toggle="modal" data-target="#SatelliteModal" data-id="{{ observation.satellite.norad_cat_id }}">
                   {{ observation.satellite.norad_cat_id }}  - {{ observation.satellite.name }}
                 </a>
               </td>
@@ -102,7 +102,7 @@
         </div>
 
         {% for data in data %}
-          <div class="panel panel-default observation-data"
+          <div class="panel panel-default observation-data" id="{{ data.id }}"
                data-start="{{ data.start|date:"U" }}"
                data-end="{{ data.end|date:"U" }}"
                data-groundstation="{{ data.ground_station }}">
@@ -120,7 +120,7 @@
                   {% endif %}
                 {% endif %}
 
-                Data payload #{{ data.id }} ~
+                Data payload <a href="{% url 'base:observation_data_view' id=data.id %}">#{{ data.id }}</a> ~
 
                 Groud Station:
                 <a href="{% url 'base:station_view' id=data.ground_station.id %}">
@@ -197,17 +197,17 @@
   {% include 'includes/utc.html' %}
 
   <!-- Satellite Modal -->
-  {% with satellite=observation.satellite %}
-    {% include 'includes/satellite.html' %}
-  {% endwith %}
+  {% include 'includes/satellite.html' %}
 
 {% endblock content %}
 
 {% block javascript %}
-  <script src="{% static 'js/lib/d3.v3.min.js' %}"></script>
-  <script src="{% static 'js/lib/d3-timeline.js' %}"></script>
-  <script src="{% static 'js/lib/wavesurfer.min.js' %}"></script>
-  <script src="{% static 'js/lib/moment.min.js' %}"></script>
+  <script src="{% static 'lib/d3/d3.js' %}"></script>
+  <script src="{% static 'lib/d3-timeline/src/d3-timeline.js' %}"></script>
+  <script src="{% static 'lib/wavesurfer.js/dist/wavesurfer.js' %}"></script>
+  <script src="{% static 'lib/moment/moment.js' %}"></script>
+  <script src="{% static 'lib/uri.js/src/URI.min.js' %}"></script>
   <script src="{% static 'js/utc.js' %}"></script>
   <script src="{% static 'js/observation_view.js' %}"></script>
+  <script src="{% static 'js/satellite.js' %}"></script>
 {% endblock javascript %}
