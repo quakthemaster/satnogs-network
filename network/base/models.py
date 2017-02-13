@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timedelta
 from shortuuidfield import ShortUUIDField
 
@@ -220,9 +221,14 @@ class Observation(models.Model):
         return self.end > now()
 
     @property
-    def is_deletable(self):
+    def is_deletable_before_start(self):
         deletion = self.start - timedelta(minutes=int(settings.OBSERVATION_MAX_DELETION_RANGE))
         return deletion > now()
+
+    @property
+    def is_deletable_after_end(self):
+        deletion = self.end + timedelta(minutes=int(settings.OBSERVATION_MIN_DELETION_RANGE))
+        return deletion < now()
 
     # observation has at least 1 payload submitted, no verification taken into account
     @property
@@ -237,7 +243,8 @@ class Observation(models.Model):
     # observation is vetted to be all bad data
     @property
     def has_no_data(self):
-        return self.data_set.filter(vetted_status='no_data').count() == self.data_set.count()
+        return self.data_set.filter(
+            vetted_status='no_data').count() == self.data_set.count()
 
     # observation has at least 1 payload left unvetted
     @property
@@ -259,7 +266,7 @@ class Data(models.Model):
     vetted_datetime = models.DateTimeField(null=True, blank=True)
     vetted_user = models.ForeignKey(User, related_name="vetted_user_set", null=True, blank=True)
     vetted_status = models.CharField(choices=OBSERVATION_STATUSES,
-                                     max_length=10, default='unknown')
+                                     max_length=20, default='unknown')
 
     @property
     def is_past(self):
@@ -280,6 +287,17 @@ class Data(models.Model):
     def is_no_data(self):
         return self.vetted_status == 'no_data'
 
+    @property
+    def payload_exists(self):
+        """ Run some checks on the payload for existence of data """
+        if self.payload is None:
+            return False
+        if not os.path.isfile(os.path.join(settings.MEDIA_ROOT, self.payload.name)):
+            return False
+        if self.payload.size == 0:
+            return False
+        return True
+
     class Meta:
         ordering = ['-start', '-end']
 
@@ -287,3 +305,7 @@ class Data(models.Model):
 class DemodData(models.Model):
     data = models.ForeignKey(Data, related_name='demoddata')
     payload_demod = models.FileField(upload_to='data_payloads', blank=True, null=True)
+
+    def display_payload(self):
+        with open(self.payload_demod.path) as fp:
+            return fp.read()

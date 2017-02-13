@@ -1,3 +1,5 @@
+/* global d3 WaveSurfer URI */
+
 $(document).ready(function() {
     'use strict';
 
@@ -14,7 +16,7 @@ $(document).ready(function() {
         return String(minute + ':' + second); // combine minute and second in string
     };
 
-    $('.observation-data').each(function( index ){
+    $('.observation-data').each(function(){
         var $this = $(this);
         var data_groundstation = $this.data('groundstation');
         var data_time_start = 1000 * $this.data('start');
@@ -33,32 +35,53 @@ $(document).ready(function() {
                       div.find('#name').text(datum.label);
                   })
                   .margin({left:140, right:10, top:0, bottom:50})
-                  .tickFormat({format: d3.time.format.utc("%H:%M"), tickTime: d3.time.minutes, tickInterval: 30, tickSize: 6});
+                  .tickFormat({format: d3.time.format.utc('%H:%M'), tickTime: d3.time.minutes, tickInterval: 30, tickSize: 6});
 
     var svg_width = 1140;
     if (screen.width < 1200) { svg_width = 940; }
     if (screen.width < 992) { svg_width = 720; }
     if (screen.width < 768) { svg_width = screen.width - 30; }
-    var svg = d3.select("#timeline").append("svg").attr("width", svg_width)
-                .datum(observation_data).call(chart);
+    d3.select('#timeline').append('svg').attr('width', svg_width)
+        .datum(observation_data).call(chart);
 
     // Waveform loading
-    $('.wave').each(function( index ){
+    $('.wave').each(function(){
         var $this = $(this);
         var wid = $this.data('id');
         var wavesurfer = Object.create(WaveSurfer);
         var data_payload_url = $this.data('payload');
         var container_el = '#data-' + wid;
-        var loading = '#loading';
+        $(container_el).css('opacity', '0');
+        var loading = '#loading-' + wid;
         var $playbackTime = $('#playback-time-' + wid);
+        var progressDiv = $('#progress-bar-' + wid);
+        var progressBar = $('.progress-bar', progressDiv);
+
+        var showProgress = function (percent) {
+            if (percent == 100) {
+                $(loading).text('Analyzing data...');
+            }
+            progressDiv.css('display', 'block');
+            progressBar.css('width', percent + '%');
+            progressBar.text(percent + '%');
+        };
+
+        var hideProgress = function () {
+            progressDiv.css('display', 'none');
+        };
+
 
         wavesurfer.init({
-          container: container_el,
-          waveColor: '#bf7fbf',
-          progressColor: 'purple'
+            container: container_el,
+            waveColor: '#bf7fbf',
+            progressColor: 'purple'
         });
 
-        wavesurfer.on('loading', function() {
+        wavesurfer.on('destroy', hideProgress);
+        wavesurfer.on('error', hideProgress);
+
+        wavesurfer.on('loading', function(percent) {
+            showProgress(percent);
             $(loading).show();
         });
 
@@ -69,6 +92,15 @@ $(document).ready(function() {
         wavesurfer.load(data_payload_url);
 
         wavesurfer.on('ready', function() {
+            hideProgress();
+            var spectrogram = Object.create(WaveSurfer.Spectrogram);
+            spectrogram.init({
+                wavesurfer: wavesurfer,
+                container: '#wave-spectrogram-' + wid,
+                fftSamples: 256,
+                windowFunc: 'hann'
+            });
+
             $playbackTime.text(formatTime(wavesurfer.getCurrentTime()));
 
             wavesurfer.on('audioprocess', function(evt) {
@@ -78,20 +110,21 @@ $(document).ready(function() {
                 $playbackTime.text(formatTime(wavesurfer.getDuration() * evt));
             });
             $(loading).hide();
+            $(container_el).css('opacity', '1');
         });
     });
 
     // Hightlight Data block
-    var uri = URI(location.href);
+    var uri = new URI(location.href);
     var data_id = uri.hash();
     $(data_id).addClass('panel-info');
 
 
     // Delete confirmation
-    var message = "Do you really want to delete this Observation?";
+    var message = 'Do you really want to delete this Observation?';
     var actions = $('#obs-delete');
     if (actions.length) {
-        actions[0].addEventListener("click", function(e) {
+        actions[0].addEventListener('click', function(e) {
             if (! confirm(message)) {
                 e.preventDefault();
             }

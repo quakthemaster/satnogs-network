@@ -37,6 +37,22 @@ class StationAllView(viewsets.ReadOnlyModelViewSet):
     serializer_class = StationSerializer
 
 
+def satellite_position(request, sat_id):
+    sat = get_object_or_404(Satellite, norad_cat_id=sat_id)
+    satellite = ephem.readtle(
+        str(sat.latest_tle.tle0),
+        str(sat.latest_tle.tle1),
+        str(sat.latest_tle.tle2)
+    )
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    satellite.compute(now)
+    data = {
+        'lon': '{0}'.format(satellite.sublong),
+        'lat': '{0}'.format(satellite.sublat)
+    }
+    return JsonResponse(data, safe=False)
+
+
 def _resolve_overlaps(station, start, end):
     data = Data.objects.filter(ground_station=station)
 
@@ -123,7 +139,6 @@ class ObservationListView(ListView):
     Displays a list of observations with pagination
     """
     model = Observation
-    ordering = '-id'
     context_object_name = "observations"
     paginate_by = settings.ITEMS_PER_PAGE
     template_name = 'base/observations.html'
@@ -131,12 +146,42 @@ class ObservationListView(ListView):
     def get_queryset(self):
         """
         Optionally filter based on norad get argument
+        Optionally filter based on good/bad/unvetted
         """
-        norad_cat_id = self.request.GET.get('norad', None)
-        if norad_cat_id is None or norad_cat_id == '':
-            return Observation.objects.all()
+        norad_cat_id = self.request.GET.get('norad', '')
+        bad = self.request.GET.get('bad', '1')
+        if bad == '0':
+            bad = False
         else:
-            return Observation.objects.filter(satellite__norad_cat_id=norad_cat_id)
+            bad = True
+        good = self.request.GET.get('good', '1')
+        if good == '0':
+            good = False
+        else:
+            good = True
+        unvetted = self.request.GET.get('unvetted', '1')
+        if unvetted == '0':
+            unvetted = False
+        else:
+            unvetted = True
+
+        if norad_cat_id == '':
+            observations = Observation.objects.all().order_by('-id')
+        else:
+            observations = Observation.objects.filter(
+                satellite__norad_cat_id=norad_cat_id).order_by('-id')
+
+        # Good/Bad/Unvetted are properties of the model not fields
+        # so cannot use queryset filtering
+        resultset = []
+        for ob in observations:
+            if bad and ob.has_no_data:
+                resultset.append(ob)
+            elif good and ob.has_verified_data:
+                resultset.append(ob)
+            elif unvetted and ob.has_unvetted_data:
+                resultset.append(ob)
+        return resultset
 
     def get_context_data(self, **kwargs):
         """
@@ -145,6 +190,9 @@ class ObservationListView(ListView):
         context = super(ObservationListView, self).get_context_data(**kwargs)
         context['satellites'] = Satellite.objects.all()
         norad_cat_id = self.request.GET.get('norad', None)
+        context['bad'] = self.request.GET.get('bad', '1')
+        context['good'] = self.request.GET.get('good', '1')
+        context['unvetted'] = self.request.GET.get('unvetted', '1')
         if norad_cat_id is not None and norad_cat_id != '':
             context['norad'] = int(norad_cat_id)
         return context
@@ -334,16 +382,31 @@ def prediction_windows(request, sat_id, start_date, end_date, station_id=None):
 def observation_view(request, id):
     """View for single observation page."""
     observation = get_object_or_404(Observation, id=id)
-    data = Data.objects.filter(observation=observation)
+    dataset = Data.objects.filter(observation=observation)
 
     # not all users will be able to vet data within an observation, allow
     # staff, observation requestors, and station owners
     is_vetting_user = False
     if request.user.is_authenticated():
         if request.user == observation.author or \
-            data.filter(ground_station__in=Station.objects.filter(owner=request.user)).count or \
+            dataset.filter(
+                ground_station__in=Station.objects.filter(owner=request.user)).count or \
                 request.user.is_staff:
                     is_vetting_user = True
+
+    # Determine if there is no valid payload file in the observation dataset
+    if request.user.has_perm('base.delete_observation'):
+        data_payload_exists = False
+        for data in dataset:
+            if data.payload_exists:
+                data_payload_exists = True
+    # This context flag will determine if a delete button appears for the observation.
+    is_deletable = False
+    if observation.author == request.user and observation.is_deletable_before_start:
+        is_deletable = True
+    if request.user.has_perm('base.delete_observation') and not data_payload_exists and \
+            observation.is_deletable_after_end:
+        is_deletable = True
 
     if settings.ENVIRONMENT == 'production':
         discuss_slug = 'https://community.satnogs.org/t/observation-{0}-{1}-{2}' \
@@ -363,12 +426,14 @@ def observation_view(request, id):
             has_comments = False
 
         return render(request, 'base/observation_view.html',
-                      {'observation': observation, 'data': data, 'has_comments': has_comments,
-                       'discuss_url': discuss_url, 'discuss_slug': discuss_slug,
-                       'is_vetting_user': is_vetting_user})
+                      {'observation': observation, 'dataset': dataset,
+                       'has_comments': has_comments, 'discuss_url': discuss_url,
+                       'discuss_slug': discuss_slug, 'is_vetting_user': is_vetting_user,
+                       'is_deletable': is_deletable})
 
     return render(request, 'base/observation_view.html',
-                  {'observation': observation, 'data': data, 'is_vetting_user': is_vetting_user})
+                  {'observation': observation, 'dataset': dataset,
+                   'is_vetting_user': is_vetting_user, 'is_deletable': is_deletable})
 
 
 @login_required
@@ -376,7 +441,14 @@ def observation_delete(request, id):
     """View for deleting observation."""
     me = request.user
     observation = get_object_or_404(Observation, id=id)
-    if observation.author == me and observation.is_deletable:
+    # Having non-existent data is also grounds for deletion if user is staff
+    data_payload_exists = False
+    for data in observation.data_set.all():
+        if data.payload_exists:
+            data_payload_exists = True
+    if (observation.author == me and observation.is_deletable_before_start) or \
+            (request.user.has_perm('base.delete_observation') and
+             not data_payload_exists and observation.is_deletable_after_end):
         observation.delete()
         messages.success(request, 'Observation deleted successfully.')
     else:
