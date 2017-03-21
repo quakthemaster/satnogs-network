@@ -46,13 +46,16 @@ class Mode(models.Model):
 
 class Antenna(models.Model):
     """Model for antennas tracked with SatNOGS."""
-    frequency = models.FloatField(validators=[MinValueValidator(0)])
+    frequency = models.PositiveIntegerField()
+    frequency_max = models.PositiveIntegerField()
     band = models.CharField(choices=zip(ANTENNA_BANDS, ANTENNA_BANDS),
                             max_length=5)
     antenna_type = models.CharField(choices=ANTENNA_TYPES, max_length=15)
 
     def __unicode__(self):
-        return '{0} - {1} - {2}'.format(self.band, self.antenna_type, self.frequency)
+        return '{0} - {1} - {2} - {3}'.format(self.band, self.antenna_type,
+                                              self.frequency,
+                                              self.frequency_max)
 
 
 class Station(models.Model):
@@ -267,6 +270,9 @@ class Data(models.Model):
     vetted_user = models.ForeignKey(User, related_name="vetted_user_set", null=True, blank=True)
     vetted_status = models.CharField(choices=OBSERVATION_STATUSES,
                                      max_length=20, default='unknown')
+    rise_azimuth = models.FloatField(blank=True, null=True)
+    max_altitude = models.FloatField(blank=True, null=True)
+    set_azimuth = models.FloatField(blank=True, null=True)
 
     @property
     def is_past(self):

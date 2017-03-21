@@ -4,13 +4,25 @@ from base import *  # flake8: noqa
 ENVIRONMENT = 'stage'
 
 # Opbeat
-MIDDLEWARE_CLASSES = MIDDLEWARE_CLASSES + (
+MIDDLEWARE += (
     'opbeat.contrib.django.middleware.OpbeatAPMMiddleware',
     'opbeat.contrib.django.middleware.Opbeat404CatchMiddleware',
 )
-INSTALLED_APPS = INSTALLED_APPS + (
+INSTALLED_APPS += (
     'opbeat.contrib.django',
 )
+
+# Cache
+CACHES = {
+    'default': {
+        'BACKEND': 'redis_cache.RedisCache',
+        'LOCATION': 'unix://var/run/redis/redis.sock',
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient'
+        },
+        'KEY_PREFIX': 'network-{0}'.format(ENVIRONMENT)
+    }
+}
 
 # Security
 ALLOWED_HOSTS = [

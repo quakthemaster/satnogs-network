@@ -22,6 +22,7 @@ THIRD_PARTY_APPS = (
     'allauth.account',
     'compressor',
     'djangobower',
+    'csp',
 )
 LOCAL_APPS = (
     'network.users',
@@ -34,7 +35,7 @@ BOWER_INSTALLED_APPS = (
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
 # Middlware
-MIDDLEWARE_CLASSES = (
+MIDDLEWARE = (
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -42,6 +43,7 @@ MIDDLEWARE_CLASSES = (
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'csp.middleware.CSPMiddleware',
 )
 
 # Email
@@ -61,6 +63,7 @@ CACHES = {
         'LOCATION': 'unique-snowflake'
     }
 }
+CACHE_TTL = int(getenv('CACHE_TTL', 300))
 
 # Internationalization
 TIME_ZONE = 'UTC'
@@ -202,6 +205,21 @@ REST_FRAMEWORK = {
 
 # Security
 SECRET_KEY = getenv('SECRET_KEY', 'changeme')
+CSP_DEFAULT_SRC = (
+    "'self'",
+    'https://*.mapbox.com',
+)
+CSP_SCRIPT_SRC = (
+    "'self'",
+    'https://*.google-analytics.com',
+)
+CSP_IMG_SRC = (
+    "'self'",
+    'https://*.gravatar.com',
+    'https://*.mapbox.com',
+    'https://*.satnogs.org',
+)
+
 
 # Database
 DATABASE_URL = getenv('DATABASE_URL', 'sqlite:///db.sqlite3')
@@ -212,15 +230,20 @@ MAPBOX_GEOCODE_URL = 'https://api.tiles.mapbox.com/v4/geocode/mapbox.places/'
 MAPBOX_MAP_ID = getenv('MAPBOX_MAP_ID', '')
 MAPBOX_TOKEN = getenv('MAPBOX_TOKEN', '')
 
-# Observations datetimes in minutes
+# Observations settings
+# Datetimes in minutes for scheduling OPTIONS
+# Deletion range in minutes
 DATE_MIN_START = '15'
 DATE_MIN_END = '75'
 DATE_MAX_RANGE = '480'
-
-# Station heartbeat in minutes
-STATION_HEARTBEAT_TIME = getenv('STATION_HEARTBEAT_TIME', 60)
 OBSERVATION_MAX_DELETION_RANGE = getenv('OBSERVATION_MAX_DELETION_RANGE', 10)
 OBSERVATION_MIN_DELETION_RANGE = getenv('OBSERVATION_MIN_DELETION_RANGE', 60)
+
+# Station settings
+# Heartbeat for keeping a station online in minutes
+# Maximum window for upcoming passes in hours
+STATION_HEARTBEAT_TIME = getenv('STATION_HEARTBEAT_TIME', 60)
+STATION_UPCOMING_END = getenv('STATION_UPCOMING_END', 12)
 
 # DB API
 DB_API_ENDPOINT = getenv('DB_API_ENDPOINT', 'https://db.satnogs.org/api/')
